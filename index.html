@@ -1,0 +1,244 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>剪片秘書</title>
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="剪片秘書">
+<meta name="theme-color" content="#16161a">
+<link rel="apple-touch-icon" href="icon-180.png">
+<link rel="icon" href="icon-180.png">
+<style>
+:root {
+  --bg: #f4f3ef; --card: #ffffff; --ink: #16161a; --sub: #6b6a66; --line: #e6e4dd;
+  --yellow: #FFD400; --red: #e5484d; --green: #2f9e5b; --soft: #fbf6d9;
+}
+@media (prefers-color-scheme: dark) {
+  :root { --bg: #111113; --card: #1c1c20; --ink: #f2f1ec; --sub: #9a9893; --line: #2c2c31; --soft: #2a2614; }
+}
+* { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+html, body { margin: 0; background: var(--bg); color: var(--ink);
+  font: 16px/1.5 -apple-system, BlinkMacSystemFont, "PingFang TC", "Noto Sans TC", sans-serif; }
+header { position: sticky; top: 0; z-index: 5; background: var(--bg);
+  padding: calc(env(safe-area-inset-top) + 14px) 16px 10px; display: flex; align-items: center; gap: 10px; }
+header h1 { margin: 0; font-size: 22px; letter-spacing: .5px; flex: 1; }
+header h1 b { background: var(--yellow); color: #16161a; padding: 0 6px; border-radius: 6px; }
+#refresh { border: 0; background: var(--card); color: var(--ink); border-radius: 999px; padding: 6px 12px; font-size: 14px; }
+#stamp { font-size: 12px; color: var(--sub); padding: 0 16px 6px; }
+main { padding: 0 16px calc(env(safe-area-inset-bottom) + 90px); max-width: 640px; margin: 0 auto; }
+nav { position: fixed; left: 0; right: 0; bottom: 0; z-index: 5; display: flex; background: var(--card);
+  border-top: 1px solid var(--line); padding-bottom: env(safe-area-inset-bottom); }
+nav button { flex: 1; border: 0; background: none; color: var(--sub); padding: 10px 0 8px; font-size: 12px; }
+nav button span { display: block; font-size: 20px; line-height: 1.2; }
+nav button.on { color: var(--ink); font-weight: 700; }
+nav button.on span { filter: none; }
+.sum { display: flex; gap: 8px; margin: 4px 0 14px; }
+.sum div { flex: 1; background: var(--card); border-radius: 14px; padding: 10px 12px; }
+.sum b { display: block; font-size: 24px; }
+.sum small { color: var(--sub); font-size: 12px; }
+h2 { font-size: 15px; color: var(--sub); margin: 18px 0 8px; font-weight: 600; }
+.card { background: var(--card); border-radius: 16px; padding: 12px 12px 12px 14px; margin-bottom: 10px;
+  display: flex; gap: 12px; align-items: center; transition: opacity .2s; }
+.card.done { opacity: .55; }
+.card.done .title { text-decoration: line-through; }
+.card .body { flex: 1; min-width: 0; }
+.meta { font-size: 13px; color: var(--sub); display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+.chip { background: var(--yellow); color: #16161a; border-radius: 6px; padding: 0 6px; font-weight: 700; font-size: 12px; }
+.tag { border-radius: 6px; padding: 0 6px; font-size: 12px; border: 1px solid var(--line); }
+.tag.late { border-color: var(--red); color: var(--red); }
+.tag.today { background: var(--red); border-color: var(--red); color: #fff; }
+.tag.start { border-color: var(--yellow); background: var(--soft); }
+.title { font-weight: 600; margin: 2px 0; word-break: break-all; }
+.note { font-size: 13px; color: var(--sub); background: var(--soft); border-radius: 8px; padding: 4px 8px; margin-top: 4px; }
+.chk { width: 44px; height: 44px; border-radius: 50%; border: 2px solid var(--line); background: none; flex: none;
+  font-size: 20px; color: transparent; }
+.chk.on { background: var(--green); border-color: var(--green); color: #fff; }
+.chk:disabled { opacity: .3; }
+.empty { text-align: center; color: var(--sub); padding: 40px 0; }
+.monthbar { display: flex; align-items: center; gap: 8px; margin: 4px 0 12px; }
+.monthbar button { border: 0; background: var(--card); color: var(--ink); width: 40px; height: 40px; border-radius: 50%; font-size: 18px; }
+.monthbar b { flex: 1; text-align: center; font-size: 18px; }
+.clients { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 12px; }
+.clients button { border: 1px solid var(--line); background: var(--card); color: var(--ink); border-radius: 999px; padding: 6px 14px; font-size: 15px; }
+.clients button.on { background: var(--yellow); border-color: var(--yellow); color: #16161a; font-weight: 700; }
+.err { background: var(--card); border: 1px solid var(--red); color: var(--red); border-radius: 12px; padding: 12px; margin: 10px 0; }
+.toast { position: fixed; left: 50%; bottom: calc(env(safe-area-inset-bottom) + 80px); transform: translateX(-50%);
+  background: #16161a; color: #fff; padding: 8px 16px; border-radius: 999px; font-size: 14px; opacity: 0; transition: opacity .2s; pointer-events: none; }
+.toast.show { opacity: .92; }
+.skel { height: 70px; border-radius: 16px; background: var(--card); margin-bottom: 10px; animation: pulse 1.2s infinite; }
+@keyframes pulse { 50% { opacity: .5; } }
+</style>
+</head>
+<body>
+<header><h1>剪片<b>秘書</b></h1><button id="refresh">↻ 更新</button></header>
+<div id="stamp"></div>
+<main id="view"><div class="skel"></div><div class="skel"></div><div class="skel"></div></main>
+<nav>
+  <button data-tab="today" class="on"><span>☀️</span>今天</button>
+  <button data-tab="undone"><span>📋</span>未完成</button>
+  <button data-tab="month"><span>📅</span>月份</button>
+  <button data-tab="client"><span>👤</span>業主</button>
+</nav>
+<div class="toast" id="toast"></div>
+<script>
+const APP_VER = '1.0';
+const API = 'https://script.google.com/macros/s/AKfycbxToGnZo4NgDHqr9Ink-ZxGHRdOYRsSo6SS8ZKWtGlCFi5Gac__vxaidNUqTmZ16RW1MQ/exec';
+const KEY = new URLSearchParams(location.search).get('k') || '';
+const $ = s => document.querySelector(s);
+const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+
+let data = null, tab = 'today', month = null, client = null;
+try { tab = localStorage.getItem('tab') || 'today'; } catch (e) {}
+
+// ── 日期工具（跟後台同一套規則） ──
+const addDays = (ymd, n) => { const d = new Date(ymd + 'T12:00:00'); d.setDate(d.getDate() + n); return d.toISOString().slice(0, 10); };
+const md = ymd => Number(ymd.slice(5, 7)) + '/' + Number(ymd.slice(8));
+const wk = ymd => '日一二三四五六'[new Date(ymd + 'T12:00:00').getDay()];
+const lead = e => (e.t.indexOf('兩集') >= 0 ? 2 : 1);
+const startOf = e => addDays(e.d, -lead(e));
+const clientOf = t => { const i = t.search(/[-－]/); return i > 0 ? t.slice(0, i).trim() : ''; };
+const shortT = t => { const i = t.search(/[-－]/); return i > 0 ? t.slice(i + 1).trim() : t; };
+const isDone = e => data.done.indexOf(String(e.id)) >= 0;
+const tracked = e => e.d >= data.since;
+
+// ── 跟後台拿資料 ──
+async function api(params) {
+  const q = new URLSearchParams(Object.assign({ k: KEY }, params));
+  let last = '';
+  for (let i = 0; i < 2; i++) {
+    try {
+      const r = await fetch(API + '?' + q.toString(), { redirect: 'follow' });
+      const j = JSON.parse(await r.text());
+      if (!j.ok) throw new Error(j.error || '伺服器錯誤');
+      return j;
+    } catch (err) { last = err.message; }
+  }
+  throw new Error(last);
+}
+
+async function load(quiet) {
+  if (!KEY) { $('#view').innerHTML = '<div class="err">這個網址少了私人鑰匙。請在 Telegram 對秘書打「網頁」，用它給的完整網址打開。</div>'; return; }
+  if (!quiet) $('#refresh').textContent = '讀取中…';
+  try {
+    data = await api({});
+    try { localStorage.setItem('cache', JSON.stringify(data)); } catch (e) {}
+    $('#stamp').textContent = '已同步 TimeTree · ' + new Date().toLocaleTimeString('zh-TW', { hour: '2-digit', minute: '2-digit' });
+    render();
+  } catch (err) {
+    $('#view').insertAdjacentHTML('afterbegin', '<div class="err">讀不到資料：' + esc(err.message) + '</div>');
+  } finally { $('#refresh').textContent = '↻ 更新'; }
+}
+
+async function toggle(id, btn) {
+  const on = data.done.indexOf(String(id)) < 0;
+  data.done = on ? data.done.concat(String(id)) : data.done.filter(x => x !== String(id));
+  render();
+  toast(on ? '✅ 標記完成' : '已取消完成');
+  try { const j = await api({ a: 'done', id: id, v: on ? '1' : '0' }); data.done = j.done; render(); }
+  catch (err) { toast('沒存到，再按一次'); data.done = on ? data.done.filter(x => x !== String(id)) : data.done.concat(String(id)); render(); }
+}
+
+// ── 畫面 ──
+function card(e, extra) {
+  const today = data.today, done = isDone(e);
+  let tag = '';
+  if (tracked(e) && !done) {
+    if (e.d < today) tag = '<span class="tag late">過期 ' + Math.round((new Date(today) - new Date(e.d)) / 864e5) + ' 天</span>';
+    else if (e.d === today) tag = '<span class="tag today">今天交</span>';
+    else if (startOf(e) <= today) tag = '<span class="tag start">剪片中</span>';
+  }
+  const c = clientOf(e.t);
+  return '<div class="card' + (done ? ' done' : '') + '"><div class="body">' +
+    '<div class="meta"><span>' + md(e.d) + '（' + wk(e.d) + '）交</span>' + (c ? '<span class="chip">' + esc(c) + '</span>' : '') + tag + (extra || '') + '</div>' +
+    '<div class="title">' + esc(c ? shortT(e.t) : e.t) + '</div>' +
+    (e.n ? '<div class="note">📝 ' + esc(e.n) + '</div>' : '') + '</div>' +
+    '<button class="chk' + (done ? ' on' : '') + '" data-id="' + esc(e.id) + '"' + (tracked(e) ? '' : ' disabled title="10/1 以前沒追蹤"') + '>✓</button></div>';
+}
+
+function summary(list) {
+  const t = list.filter(tracked), ok = t.filter(isDone).length, late = t.filter(e => !isDone(e) && e.d < data.today).length;
+  return '<div class="sum"><div><b>' + list.length + '</b><small>總共</small></div><div><b>' + ok + '</b><small>完成</small></div>' +
+    '<div><b>' + (t.length - ok) + '</b><small>未完成</small></div><div><b style="color:var(--red)">' + late + '</b><small>過期</small></div></div>';
+}
+
+function viewToday() {
+  const d = data.today, ev = data.events;
+  const due = ev.filter(e => e.d === d), start = ev.filter(e => startOf(e) === d && e.d !== d);
+  const late = ev.filter(e => tracked(e) && !isDone(e) && e.d < d);
+  const tmr = addDays(d, 1), next = ev.filter(e => e.d === tmr || startOf(e) === tmr);
+  let h = '<h2>' + md(d) + '（' + wk(d) + '）</h2>';
+  if (!due.length && !start.length) h += '<div class="empty">今天沒有排到要剪或要交的片 🎉</div>';
+  if (due.length) h += '<h2>🔥 今天要交</h2>' + due.map(e => card(e)).join('');
+  if (start.length) h += '<h2>✂️ 今天開始剪</h2>' + start.map(e => card(e)).join('');
+  if (late.length) h += '<h2>⚠️ 過了交片日還沒按完成</h2>' + late.map(e => card(e)).join('');
+  if (next.length) h += '<h2>🌅 明天</h2>' + next.map(e => card(e, e.d === tmr ? '' : '<span class="tag start">明天開始剪</span>')).join('');
+  return h;
+}
+
+function viewUndone() {
+  const d = data.today;
+  const list = data.events.filter(e => tracked(e) && !isDone(e) && startOf(e) <= d);
+  if (!list.length) return '<div class="empty">目前沒有未完成的片 👍</div>';
+  return '<h2>已經到了該剪的日子、還沒按完成（' + list.length + ' 支）</h2>' + list.map(e => card(e)).join('');
+}
+
+function monthBar() {
+  const [y, m] = month.split('-').map(Number);
+  return '<div class="monthbar"><button data-m="-1">‹</button><b>' + y + ' 年 ' + m + ' 月</b><button data-m="1">›</button></div>';
+}
+
+function viewMonth() {
+  const list = data.events.filter(e => e.d.slice(0, 7) === month);
+  if (!list.length) return monthBar() + '<div class="empty">這個月沒有排到片</div>';
+  return monthBar() + summary(list) + list.map(e => card(e)).join('');
+}
+
+function viewClient() {
+  const names = [];
+  data.events.forEach(e => { const c = clientOf(e.t); if (c && names.indexOf(c) < 0) names.push(c); });
+  if (!client || names.indexOf(client) < 0) client = names[0];
+  const chips = '<div class="clients">' + names.map(n => '<button data-c="' + esc(n) + '"' + (n === client ? ' class="on"' : '') + '>' + esc(n) + '</button>').join('') + '</div>';
+  const list = data.events.filter(e => e.d.slice(0, 7) === month && clientOf(e.t) === client);
+  if (!list.length) return chips + monthBar() + '<div class="empty">' + esc(client) + ' 這個月沒有排到片</div>';
+  const left = list.filter(e => tracked(e) && !isDone(e)), done = list.filter(isDone), old = list.filter(e => !tracked(e));
+  return chips + monthBar() + summary(list) +
+    (left.length ? '<h2>還沒完成</h2>' + left.map(e => card(e)).join('') : '') +
+    (done.length ? '<h2>已完成</h2>' + done.map(e => card(e)).join('') : '') +
+    (old.length ? '<h2>10/1 以前（沒追蹤）</h2>' + old.map(e => card(e)).join('') : '');
+}
+
+function render() {
+  if (!data) return;
+  if (!month) month = data.today.slice(0, 7);
+  document.querySelectorAll('nav button').forEach(b => b.classList.toggle('on', b.dataset.tab === tab));
+  $('#view').innerHTML = { today: viewToday, undone: viewUndone, month: viewMonth, client: viewClient }[tab]();
+}
+
+function toast(t) { const el = $('#toast'); el.textContent = t; el.classList.add('show'); clearTimeout(toast.h); toast.h = setTimeout(() => el.classList.remove('show'), 1500); }
+
+// ── 操作 ──
+document.querySelector('nav').addEventListener('click', ev => {
+  const b = ev.target.closest('button'); if (!b) return;
+  tab = b.dataset.tab; try { localStorage.setItem('tab', tab); } catch (e) {}
+  render(); window.scrollTo(0, 0);
+});
+$('#view').addEventListener('click', ev => {
+  const chk = ev.target.closest('.chk');
+  if (chk && !chk.disabled) return toggle(chk.dataset.id, chk);
+  const mb = ev.target.closest('[data-m]');
+  if (mb) { const [y, m] = month.split('-').map(Number); const d = new Date(y, m - 1 + Number(mb.dataset.m), 1);
+    month = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0'); return render(); }
+  const cb = ev.target.closest('[data-c]');
+  if (cb) { client = cb.dataset.c; render(); }
+});
+$('#refresh').addEventListener('click', () => load());
+document.addEventListener('visibilitychange', () => { if (!document.hidden && data) load(true); });
+
+// 先顯示上次的資料，再去拿最新的
+try { const c = JSON.parse(localStorage.getItem('cache') || 'null'); if (c && KEY) { data = c; $('#stamp').textContent = '顯示上次的資料，更新中…'; render(); } } catch (e) {}
+load();
+</script>
+</body>
+</html>
