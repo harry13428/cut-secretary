@@ -83,7 +83,7 @@ h2 { font-size: 15px; color: var(--sub); margin: 18px 0 8px; font-weight: 600; }
 </nav>
 <div class="toast" id="toast"></div>
 <script>
-const APP_VER = '1.0';
+const APP_VER = '1.1';
 const API = 'https://script.google.com/macros/s/AKfycbxToGnZo4NgDHqr9Ink-ZxGHRdOYRsSo6SS8ZKWtGlCFi5Gac__vxaidNUqTmZ16RW1MQ/exec';
 const KEY = new URLSearchParams(location.search).get('k') || '';
 const $ = s => document.querySelector(s);
@@ -98,8 +98,6 @@ const md = ymd => Number(ymd.slice(5, 7)) + '/' + Number(ymd.slice(8));
 const wk = ymd => '日一二三四五六'[new Date(ymd + 'T12:00:00').getDay()];
 const lead = e => (e.t.indexOf('兩集') >= 0 ? 2 : 1);
 const startOf = e => addDays(e.d, -lead(e));
-const clientOf = t => { const i = t.search(/[-－]/); return i > 0 ? t.slice(0, i).trim() : ''; };
-const shortT = t => { const i = t.search(/[-－]/); return i > 0 ? t.slice(i + 1).trim() : t; };
 const isDone = e => data.done.indexOf(String(e.id)) >= 0;
 const tracked = e => e.d >= data.since;
 
@@ -149,10 +147,10 @@ function card(e, extra) {
     else if (e.d === today) tag = '<span class="tag today">今天交</span>';
     else if (startOf(e) <= today) tag = '<span class="tag start">剪片中</span>';
   }
-  const c = clientOf(e.t);
+  const c = e.c;
   return '<div class="card' + (done ? ' done' : '') + '"><div class="body">' +
     '<div class="meta"><span>' + md(e.d) + '（' + wk(e.d) + '）交</span>' + (c ? '<span class="chip">' + esc(c) + '</span>' : '') + tag + (extra || '') + '</div>' +
-    '<div class="title">' + esc(c ? shortT(e.t) : e.t) + '</div>' +
+    '<div class="title">' + esc(c ? e.s : e.t) + '</div>' +
     (e.n ? '<div class="note">📝 ' + esc(e.n) + '</div>' : '') + '</div>' +
     '<button class="chk' + (done ? ' on' : '') + '" data-id="' + esc(e.id) + '"' + (tracked(e) ? '' : ' disabled title="10/1 以前沒追蹤"') + '>✓</button></div>';
 }
@@ -197,10 +195,10 @@ function viewMonth() {
 
 function viewClient() {
   const names = [];
-  data.events.forEach(e => { const c = clientOf(e.t); if (c && names.indexOf(c) < 0) names.push(c); });
+  data.events.slice().reverse().forEach(e => { if (e.c && names.indexOf(e.c) < 0) names.push(e.c); });
   if (!client || names.indexOf(client) < 0) client = names[0];
   const chips = '<div class="clients">' + names.map(n => '<button data-c="' + esc(n) + '"' + (n === client ? ' class="on"' : '') + '>' + esc(n) + '</button>').join('') + '</div>';
-  const list = data.events.filter(e => e.d.slice(0, 7) === month && clientOf(e.t) === client);
+  const list = data.events.filter(e => e.d.slice(0, 7) === month && e.c === client);
   if (!list.length) return chips + monthBar() + '<div class="empty">' + esc(client) + ' 這個月沒有排到片</div>';
   const left = list.filter(e => tracked(e) && !isDone(e)), done = list.filter(isDone), old = list.filter(e => !tracked(e));
   return chips + monthBar() + summary(list) +
