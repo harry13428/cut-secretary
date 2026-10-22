@@ -60,6 +60,10 @@ h2 { font-size: 15px; color: var(--sub); margin: 18px 0 8px; font-weight: 600; }
 .monthbar { display: flex; align-items: center; gap: 8px; margin: 4px 0 12px; }
 .monthbar button { border: 0; background: var(--card); color: var(--ink); width: 40px; height: 40px; border-radius: 50%; font-size: 18px; }
 .monthbar b { flex: 1; text-align: center; font-size: 18px; }
+#ip { width: 100%; margin: 0 0 12px; padding: 10px 12px; font-size: 16px; border-radius: 12px;
+  border: 1px solid var(--line); background: var(--card); color: var(--ink); -webkit-appearance: none; appearance: none;
+  background-image: linear-gradient(45deg, transparent 50%, var(--sub) 50%), linear-gradient(135deg, var(--sub) 50%, transparent 50%);
+  background-position: calc(100% - 20px) 50%, calc(100% - 14px) 50%; background-size: 6px 6px; background-repeat: no-repeat; }
 .clients { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 12px; }
 .clients button { border: 1px solid var(--line); background: var(--card); color: var(--ink); border-radius: 999px; padding: 6px 14px; font-size: 15px; }
 .clients button.on { background: var(--yellow); border-color: var(--yellow); color: #16161a; font-weight: 700; }
@@ -79,17 +83,17 @@ h2 { font-size: 15px; color: var(--sub); margin: 18px 0 8px; font-weight: 600; }
   <button data-tab="today" class="on"><span>☀️</span>今天</button>
   <button data-tab="undone"><span>📋</span>未完成</button>
   <button data-tab="month"><span>📅</span>月份</button>
-  <button data-tab="client"><span>👤</span>業主</button>
+  <button data-tab="client"><span>👤</span>IP</button>
 </nav>
 <div class="toast" id="toast"></div>
 <script>
-const APP_VER = '1.1';
+const APP_VER = '1.2';
 const API = 'https://script.google.com/macros/s/AKfycbxToGnZo4NgDHqr9Ink-ZxGHRdOYRsSo6SS8ZKWtGlCFi5Gac__vxaidNUqTmZ16RW1MQ/exec';
 const KEY = new URLSearchParams(location.search).get('k') || '';
 const $ = s => document.querySelector(s);
 const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 
-let data = null, tab = 'today', month = null, client = null;
+let data = null, tab = 'today', month = null, client = null, ip = '';
 try { tab = localStorage.getItem('tab') || 'today'; } catch (e) {}
 
 // ── 日期工具（跟後台同一套規則） ──
@@ -187,10 +191,21 @@ function monthBar() {
   return '<div class="monthbar"><button data-m="-1">‹</button><b>' + y + ' 年 ' + m + ' 月</b><button data-m="1">›</button></div>';
 }
 
+// IP 選單：列出這個月有片的 IP（片多的排前面），選了就只看那個 IP
+function ipMenu(all) {
+  const cnt = {};
+  all.forEach(e => { const c = e.c || '其他'; cnt[c] = (cnt[c] || 0) + 1; });
+  const names = Object.keys(cnt).sort((a, b) => (a === '其他') - (b === '其他') || cnt[b] - cnt[a]);
+  return '<select id="ip"><option value="">全部 IP（' + all.length + ' 支）</option>' +
+    names.map(n => '<option value="' + esc(n) + '"' + (n === ip ? ' selected' : '') + '>' + esc(n) + '（' + cnt[n] + ' 支）</option>').join('') + '</select>';
+}
+
 function viewMonth() {
-  const list = data.events.filter(e => e.d.slice(0, 7) === month);
-  if (!list.length) return monthBar() + '<div class="empty">這個月沒有排到片</div>';
-  return monthBar() + summary(list) + list.map(e => card(e)).join('');
+  const all = data.events.filter(e => e.d.slice(0, 7) === month);
+  if (!all.length) return monthBar() + '<div class="empty">這個月沒有排到片</div>';
+  if (ip && !all.some(e => (e.c || '其他') === ip)) ip = '';
+  const list = ip ? all.filter(e => (e.c || '其他') === ip) : all;
+  return monthBar() + ipMenu(all) + summary(list) + list.map(e => card(e)).join('');
 }
 
 function viewClient() {
@@ -230,6 +245,9 @@ $('#view').addEventListener('click', ev => {
     month = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0'); return render(); }
   const cb = ev.target.closest('[data-c]');
   if (cb) { client = cb.dataset.c; render(); }
+});
+$('#view').addEventListener('change', ev => {
+  if (ev.target.id === 'ip') { ip = ev.target.value; render(); }
 });
 $('#refresh').addEventListener('click', () => load());
 document.addEventListener('visibilitychange', () => { if (!document.hidden && data) load(true); });
