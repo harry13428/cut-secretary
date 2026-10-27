@@ -1,0 +1,21 @@
+# 「不要再忘記了」推播：每 5 分鐘把時間到的提醒推到手機（GitHub 排程常晚幾分鐘，雲端會補送 90 分鐘內的）
+name: push
+on:
+  schedule:
+    - cron: '*/5 * * * *'
+  workflow_dispatch:
+jobs:
+  send:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - run: npm install --no-save --no-audit --no-fund web-push@3.6.7
+      - run: node push/send.js
+        env:
+          APP_KEY: ${{ secrets.APP_KEY }}
+          VAPID_PUBLIC: ${{ secrets.VAPID_PUBLIC }}
+          VAPID_PRIVATE: ${{ secrets.VAPID_PRIVATE }}
