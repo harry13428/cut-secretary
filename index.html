@@ -10,6 +10,7 @@
 <meta name="theme-color" content="#16161a">
 <link rel="apple-touch-icon" href="icon-alarm-180.png">
 <link rel="icon" href="icon-alarm-180.png">
+<link rel="manifest" href="manifest.json">
 <style>
 :root {
   --bg: #f4f3ef; --card: #ffffff; --ink: #16161a; --sub: #6b6a66; --line: #e6e4dd;
@@ -28,7 +29,7 @@ header { position: sticky; top: 0; z-index: 5; background: var(--bg);
   padding: calc(env(safe-area-inset-top) + 14px) 16px 10px; display: flex; align-items: center; gap: 10px; }
 header h1 { margin: 0; font-size: 22px; letter-spacing: .5px; flex: 1; }
 header h1 b { background: var(--yellow); color: #16161a; padding: 0 6px; border-radius: 6px; }
-#refresh { border: 0; background: var(--card); color: var(--ink); border-radius: 999px; padding: 6px 12px; font-size: 14px; }
+#refresh, #bell { border: 0; background: var(--card); color: var(--ink); border-radius: 999px; padding: 6px 12px; font-size: 14px; }
 #stamp { font-size: 12px; color: var(--sub); padding: 0 16px 6px; display: flex; gap: 8px; }
 #stamp #ver { margin-left: auto; }
 #newVer { display: none; margin: 0 16px 8px; padding: 10px 14px; border: 0; border-radius: 12px; width: calc(100% - 32px);
@@ -45,6 +46,13 @@ nav button.on span { filter: none; }
   display: flex; gap: 6px; margin: 0 16px 6px; padding: 4px; border-radius: 12px; background: var(--card); }
 .modes button { flex: 1; border: 0; background: none; color: var(--sub); padding: 8px 0; border-radius: 9px; font-size: 15px; }
 .modes button.on { background: var(--yellow); color: #16161a; font-weight: 700; }
+.cal { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; margin-bottom: 8px; }
+.cal .wd { text-align: center; font-size: 12px; color: var(--sub); padding: 2px 0; }
+.cal .day { border: 0; background: var(--card); color: var(--ink); border-radius: 10px; min-height: 54px; padding: 5px 0 3px;
+  display: flex; flex-direction: column; align-items: center; gap: 2px; font-size: 15px; }
+.cal .day small { font-size: 11px; line-height: 1.15; }
+.cal .day.today span { background: var(--red); color: #fff; border-radius: 999px; padding: 0 6px; }
+.cal .day.sel { outline: 2px solid var(--yellow); outline-offset: -2px; }
 .tag.soon { border-color: #f5a524; color: #c27c00; }
 .todo { background: var(--card); border-radius: 16px; padding: 12px 14px; margin-bottom: 10px; display: flex; gap: 10px; align-items: center; }
 .todo b { flex: 1; font-weight: 600; }
@@ -91,7 +99,7 @@ h2 { font-size: 15px; color: var(--sub); margin: 18px 0 8px; font-weight: 600; }
 </style>
 </head>
 <body>
-<header><h1>不要再<b>忘記了</b></h1><button id="refresh">↻ 更新</button></header>
+<header><h1>不要再<b>忘記了</b></h1><button id="bell">🔔 開通知</button><button id="refresh">↻ 更新</button></header>
 <div class="modes"><button data-mode="work">🏢 公司</button><button data-mode="home">🏠 私人</button></div>
 <div id="stamp"><span id="sync"></span><span id="ver"></span></div>
 <button id="newVer"></button>
@@ -99,18 +107,23 @@ h2 { font-size: 15px; color: var(--sub); margin: 18px 0 8px; font-weight: 600; }
 <nav></nav>
 <div class="toast" id="toast"></div>
 <script>
-const APP_VER = '2.0';
+const APP_VER = '2.1';
 const API = 'https://script.google.com/macros/s/AKfycbxToGnZo4NgDHqr9Ink-ZxGHRdOYRsSo6SS8ZKWtGlCFi5Gac__vxaidNUqTmZ16RW1MQ/exec';
-const KEY = new URLSearchParams(location.search).get('k') || '';
+// 鑰匙：網址有就記起來，從主畫面打開（網址沒帶）就用記住的
+const KEY = (() => {
+  const k = new URLSearchParams(location.search).get('k');
+  try { if (k) localStorage.setItem('key', k); return k || localStorage.getItem('key') || ''; } catch (e) { return k || ''; }
+})();
+const VAPID = 'BGGkGdenGIVzv7BeoV4WpjqXfRqvCRin41FblMuT2KCstr4GTJhjcqWIOetZUn0ygGqNff2xjh4P3BMzGwgMtlU';   // 推播公鑰（私鑰在 GitHub Secrets）
 const $ = s => document.querySelector(s);
 const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 
 // 公司（穎流：Lark 交片期限＋日報、週報）／私人（TimeTree 剪片排程）各有自己的分頁
 const TABS = {
-  work: [['wtoday', '☀️', '今天'], ['due', '📦', '交片期限']],
-  home: [['today', '☀️', '今天'], ['undone', '📋', '未完成'], ['month', '📅', '月份'], ['client', '👤', 'IP']],
+  work: [['cal', '📅', '行事曆'], ['wtoday', '☀️', '今天'], ['due', '📦', '交片期限']],
+  home: [['cal', '📅', '行事曆'], ['today', '☀️', '今天'], ['undone', '📋', '未完成'], ['client', '👤', 'IP']],
 };
-let data = null, mode = 'work', tab = 'wtoday', month = null, client = null, ip = '';
+let data = null, mode = 'work', tab = 'cal', month = null, client = null, sel = null;
 try {
   mode = localStorage.getItem('mode') || 'work';
   tab = localStorage.getItem('tab_' + mode) || TABS[mode][0][0];
@@ -141,7 +154,7 @@ async function api(params) {
 }
 
 async function load(quiet) {
-  if (!KEY) { $('#view').innerHTML = '<div class="err">這個網址少了私人鑰匙。請在 Telegram 對秘書打「網頁」，用它給的完整網址打開。</div>'; return; }
+  if (!KEY) { $('#view').innerHTML = '<div class="err">這個網址少了私人鑰匙。請用描述檔裝的「不要再忘記了」打開，或在 Telegram 對秘書打「網頁」拿完整網址。</div>'; return; }
   if (!quiet) $('#refresh').textContent = '讀取中…';
   try {
     data = await api({});
@@ -211,21 +224,35 @@ function monthBar() {
   return '<div class="monthbar"><button data-m="-1">‹</button><b>' + y + ' 年 ' + m + ' 月</b><button data-m="1">›</button></div>';
 }
 
-// IP 選單：列出這個月有片的 IP（片多的排前面），選了就只看那個 IP
-function ipMenu(all) {
-  const cnt = {};
-  all.forEach(e => { const c = e.c || '其他'; cnt[c] = (cnt[c] || 0) + 1; });
-  const names = Object.keys(cnt).sort((a, b) => (a === '其他') - (b === '其他') || cnt[b] - cnt[a]);
-  return '<select id="ip"><option value="">全部 IP（' + all.length + ' 支）</option>' +
-    names.map(n => '<option value="' + esc(n) + '"' + (n === ip ? ' selected' : '') + '>' + esc(n) + '（' + cnt[n] + ' 支）</option>').join('') + '</select>';
+// 月曆：公司看 Lark 交付／外審，私人看交片／開始剪；點某天看那天的事
+function dayItems(d) {
+  if (mode === 'work') {
+    const rows = larkRows();
+    return rows.filter(r => r.plan === d).map(r => ['📦', larkCard(r)])
+      .concat(rows.filter(r => r.out === d).map(r => ['👀', larkCard(r)]));
+  }
+  return data.events.filter(e => e.d === d).map(e => ['🎬', card(e)])
+    .concat(data.events.filter(e => startOf(e) === d && e.d !== d).map(e => ['✂️', card(e, '<span class="tag start">開始剪</span>')]));
 }
 
-function viewMonth() {
-  const all = data.events.filter(e => e.d.slice(0, 7) === month);
-  if (!all.length) return monthBar() + '<div class="empty">這個月沒有排到片</div>';
-  if (ip && !all.some(e => (e.c || '其他') === ip)) ip = '';
-  const list = ip ? all.filter(e => (e.c || '其他') === ip) : all;
-  return monthBar() + ipMenu(all) + summary(list) + list.map(e => card(e)).join('');
+function viewCal() {
+  const [y, m] = month.split('-').map(Number), first = new Date(y, m - 1, 1).getDay(), days = new Date(y, m, 0).getDate();
+  if (!sel || sel.slice(0, 7) !== month) sel = data.today.slice(0, 7) === month ? data.today : month + '-01';
+  let g = '<div class="cal">' + '日一二三四五六'.split('').map(w => '<div class="wd">' + w + '</div>').join('') + '<div></div>'.repeat(first);
+  for (let i = 1; i <= days; i++) {
+    const d = month + '-' + String(i).padStart(2, '0'), cnt = {};
+    dayItems(d).forEach(x => { cnt[x[0]] = (cnt[x[0]] || 0) + 1; });
+    const marks = Object.keys(cnt).map(k => k + (cnt[k] > 1 ? cnt[k] : '')).join('');
+    g += '<button class="day' + (d === data.today ? ' today' : '') + (d === sel ? ' sel' : '') + '" data-day="' + d + '"><span>' + i + '</span><small>' + marks + '</small></button>';
+  }
+  const list = dayItems(sel);
+  let h = monthBar() + (mode === 'work' ? larkStamp() : '') + g + '</div><h2>' + md(sel) + '（' + wk(sel) + '）</h2>' +
+    (list.length ? list.map(x => x[1]).join('') : '<div class="empty">這天沒有排到事</div>');
+  if (mode === 'work') {
+    h += '<div class="todo"><span>📝</span><b>寫每日復盤</b><small>21:00 提醒</small></div>';
+    if (wk(sel) === '五') h += '<div class="todo"><span>📋</span><b>打 IP 週報</b><small>10:00 提醒</small></div>';
+  }
+  return h;
 }
 
 function viewClient() {
@@ -294,7 +321,7 @@ function render() {
   document.querySelectorAll('.modes button').forEach(b => b.classList.toggle('on', b.dataset.mode === mode));
   document.querySelector('nav').innerHTML = TABS[mode].map(t =>
     '<button data-tab="' + t[0] + '"' + (t[0] === tab ? ' class="on"' : '') + '><span>' + t[1] + '</span>' + t[2] + '</button>').join('');
-  $('#view').innerHTML = { wtoday: viewWorkToday, due: viewDue, today: viewToday, undone: viewUndone, month: viewMonth, client: viewClient }[tab]();
+  $('#view').innerHTML = { cal: viewCal, wtoday: viewWorkToday, due: viewDue, today: viewToday, undone: viewUndone, client: viewClient }[tab]();
 }
 
 function toast(t) { const el = $('#toast'); el.textContent = t; el.classList.add('show'); clearTimeout(toast.h); toast.h = setTimeout(() => el.classList.remove('show'), 1500); }
@@ -318,12 +345,43 @@ $('#view').addEventListener('click', ev => {
   if (mb) { const [y, m] = month.split('-').map(Number); const d = new Date(y, m - 1 + Number(mb.dataset.m), 1);
     month = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0'); return render(); }
   const cb = ev.target.closest('[data-c]');
-  if (cb) { client = cb.dataset.c; render(); }
-});
-$('#view').addEventListener('change', ev => {
-  if (ev.target.id === 'ip') { ip = ev.target.value; render(); }
+  if (cb) { client = cb.dataset.c; return render(); }
+  const db = ev.target.closest('[data-day]');
+  if (db) { sel = db.dataset.day; render(); }
 });
 $('#refresh').addEventListener('click', () => load());
+
+// ── 通知：App 自己的推播（iPhone 要從主畫面打開、iOS 16.4 以上才能開） ──
+const canPush = () => 'serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window;
+const b64u = s => Uint8Array.from(atob((s + '='.repeat((4 - s.length % 4) % 4)).replace(/-/g, '+').replace(/_/g, '/')), c => c.charCodeAt(0));
+async function bellState() {
+  const b = $('#bell');
+  if (!canPush()) { b.textContent = '🔕'; return; }
+  const sub = await (await navigator.serviceWorker.ready).pushManager.getSubscription();
+  b.textContent = sub && Notification.permission === 'granted' ? '🔔 已開' : '🔔 開通知';
+}
+async function enablePush() {
+  if (!canPush()) {
+    alert('這裡沒辦法開通知。\n請從主畫面上的「不要再忘記了」圖示打開，再按一次 🔔。\n（iPhone 要 iOS 16.4 以上）');
+    return;
+  }
+  if (await Notification.requestPermission() !== 'granted') { toast('沒有允許通知，可以到 設定 → 通知 打開'); return bellState(); }
+  $('#bell').textContent = '設定中…';
+  try {
+    const reg = await navigator.serviceWorker.ready;
+    const sub = (await reg.pushManager.getSubscription()) || await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: b64u(VAPID) });
+    let j = null;
+    for (let i = 0; i < 3 && !(j && j.ok); i++) {
+      try { j = JSON.parse(await (await fetch(API + '?a=sub&k=' + encodeURIComponent(KEY), { method: 'POST', body: JSON.stringify(sub) })).text()); } catch (e) {}
+    }
+    if (!j || !j.ok) throw new Error((j && j.error) || '雲端沒回應');
+    toast('✅ 通知開好了，10 分鐘內會收到一則測試通知');
+  } catch (err) { toast('開通知失敗：' + err.message); }
+  bellState();
+}
+$('#bell').addEventListener('click', enablePush);
+if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').then(bellState).catch(() => {});
+else bellState();
 document.addEventListener('visibilitychange', () => { if (!document.hidden && data) load(true); });
 
 // 版本號；GitHub 上有新版就跳黃色按鈕，點了重新載入
