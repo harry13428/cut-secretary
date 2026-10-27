@@ -3,13 +3,13 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>剪片秘書</title>
+<title>不要再忘記了</title>
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<meta name="apple-mobile-web-app-title" content="剪片秘書">
+<meta name="apple-mobile-web-app-title" content="不要再忘記了">
 <meta name="theme-color" content="#16161a">
-<link rel="apple-touch-icon" href="icon-180.png">
-<link rel="icon" href="icon-180.png">
+<link rel="apple-touch-icon" href="icon-alarm-180.png">
+<link rel="icon" href="icon-alarm-180.png">
 <style>
 :root {
   --bg: #f4f3ef; --card: #ffffff; --ink: #16161a; --sub: #6b6a66; --line: #e6e4dd;
@@ -41,6 +41,14 @@ nav button { flex: 1; border: 0; background: none; color: var(--sub); padding: 1
 nav button span { display: block; font-size: 20px; line-height: 1.2; }
 nav button.on { color: var(--ink); font-weight: 700; }
 nav button.on span { filter: none; }
+.modes { position: sticky; top: calc(env(safe-area-inset-top) + 58px); z-index: 4; background: var(--bg);
+  display: flex; gap: 6px; margin: 0 16px 6px; padding: 4px; border-radius: 12px; background: var(--card); }
+.modes button { flex: 1; border: 0; background: none; color: var(--sub); padding: 8px 0; border-radius: 9px; font-size: 15px; }
+.modes button.on { background: var(--yellow); color: #16161a; font-weight: 700; }
+.tag.soon { border-color: #f5a524; color: #c27c00; }
+.todo { background: var(--card); border-radius: 16px; padding: 12px 14px; margin-bottom: 10px; display: flex; gap: 10px; align-items: center; }
+.todo b { flex: 1; font-weight: 600; }
+.todo small { color: var(--sub); }
 .sum { display: flex; gap: 8px; margin: 4px 0 14px; }
 .sum div { flex: 1; background: var(--card); border-radius: 14px; padding: 10px 12px; }
 .sum b { display: block; font-size: 24px; }
@@ -83,26 +91,30 @@ h2 { font-size: 15px; color: var(--sub); margin: 18px 0 8px; font-weight: 600; }
 </style>
 </head>
 <body>
-<header><h1>剪片<b>秘書</b></h1><button id="refresh">↻ 更新</button></header>
+<header><h1>不要再<b>忘記了</b></h1><button id="refresh">↻ 更新</button></header>
+<div class="modes"><button data-mode="work">🏢 公司</button><button data-mode="home">🏠 私人</button></div>
 <div id="stamp"><span id="sync"></span><span id="ver"></span></div>
 <button id="newVer"></button>
 <main id="view"><div class="skel"></div><div class="skel"></div><div class="skel"></div></main>
-<nav>
-  <button data-tab="today" class="on"><span>☀️</span>今天</button>
-  <button data-tab="undone"><span>📋</span>未完成</button>
-  <button data-tab="month"><span>📅</span>月份</button>
-  <button data-tab="client"><span>👤</span>IP</button>
-</nav>
+<nav></nav>
 <div class="toast" id="toast"></div>
 <script>
-const APP_VER = '1.3';
+const APP_VER = '2.0';
 const API = 'https://script.google.com/macros/s/AKfycbxToGnZo4NgDHqr9Ink-ZxGHRdOYRsSo6SS8ZKWtGlCFi5Gac__vxaidNUqTmZ16RW1MQ/exec';
 const KEY = new URLSearchParams(location.search).get('k') || '';
 const $ = s => document.querySelector(s);
 const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 
-let data = null, tab = 'today', month = null, client = null, ip = '';
-try { tab = localStorage.getItem('tab') || 'today'; } catch (e) {}
+// 公司（穎流：Lark 交片期限＋日報、週報）／私人（TimeTree 剪片排程）各有自己的分頁
+const TABS = {
+  work: [['wtoday', '☀️', '今天'], ['due', '📦', '交片期限']],
+  home: [['today', '☀️', '今天'], ['undone', '📋', '未完成'], ['month', '📅', '月份'], ['client', '👤', 'IP']],
+};
+let data = null, mode = 'work', tab = 'wtoday', month = null, client = null, ip = '';
+try {
+  mode = localStorage.getItem('mode') || 'work';
+  tab = localStorage.getItem('tab_' + mode) || TABS[mode][0][0];
+} catch (e) {}
 
 // ── 日期工具（跟後台同一套規則） ──
 const addDays = (ymd, n) => { const d = new Date(ymd + 'T12:00:00'); d.setDate(d.getDate() + n); return d.toISOString().slice(0, 10); };
@@ -134,7 +146,7 @@ async function load(quiet) {
   try {
     data = await api({});
     try { localStorage.setItem('cache', JSON.stringify(data)); } catch (e) {}
-    $('#sync').textContent = '已同步 TimeTree · ' + new Date().toLocaleTimeString('zh-TW', { hour: '2-digit', minute: '2-digit' });
+    $('#sync').textContent = '已同步 · ' + new Date().toLocaleTimeString('zh-TW', { hour: '2-digit', minute: '2-digit' });
     render();
   } catch (err) {
     $('#view').insertAdjacentHTML('afterbegin', '<div class="err">讀不到資料：' + esc(err.message) + '</div>');
@@ -230,11 +242,59 @@ function viewClient() {
     (old.length ? '<h2>10/1 以前（沒追蹤）</h2>' + old.map(e => card(e)).join('') : '');
 }
 
+// ── 公司：Lark 交片期限（Mac 每天從 Lark 讀一次傳上來，只有「實際交付日」還沒填的片） ──
+const larkRows = () => ((data.lark && data.lark.rows) || []).slice().sort((a, b) => (a.plan < b.plan ? -1 : 1));
+const daysTo = ymd => Math.round((new Date(ymd + 'T12:00:00') - new Date(data.today + 'T12:00:00')) / 864e5);
+
+function larkCard(r) {
+  const n = daysTo(r.plan);
+  const tag = n < 0 ? '<span class="tag late">超過 ' + -n + ' 天</span>' : n === 0 ? '<span class="tag today">今天交</span>' :
+    n <= 5 ? '<span class="tag soon">剩 ' + n + ' 天</span>' : '<span class="tag">剩 ' + n + ' 天</span>';
+  return '<div class="card"><div class="body">' +
+    '<div class="meta"><span>' + md(r.plan) + '（' + wk(r.plan) + '）交付</span>' + (r.ip ? '<span class="chip">' + esc(r.ip) + '</span>' : '') + tag + '</div>' +
+    '<div class="title">' + esc((r.no ? r.no + ' ' : '') + r.t) + '</div>' +
+    '<div class="meta">' + (r.out ? '<span>👀 預計外審 ' + md(r.out) + '（' + wk(r.out) + '）</span>' : '') + '<span>目前：' + esc(r.s || '—') + '</span></div>' +
+    '</div></div>';
+}
+
+function larkStamp() {
+  if (!data.lark) return '<div class="err">還沒有 Lark 資料：Mac 開著、Chrome 有登入 Lark 時，每天 9:30 會自動傳上來。</div>';
+  const at = new Date(data.lark.at), age = Math.floor((Date.now() - at) / 864e5);
+  const t = (at.getMonth() + 1) + '/' + at.getDate() + ' ' + at.toLocaleTimeString('zh-TW', { hour: '2-digit', minute: '2-digit' });
+  return age >= 3 ? '<div class="err">⚠️ Lark 資料 ' + age + ' 天沒更新（最後 ' + t + '），已交的片可能還列在這裡</div>'
+    : '<div class="meta" style="margin-bottom:6px">Lark 資料更新於 ' + t + '</div>';
+}
+
+function viewWorkToday() {
+  const d = data.today, rows = larkRows();
+  const late = rows.filter(r => r.plan < d), due = rows.filter(r => r.plan === d);
+  const soon = rows.filter(r => r.plan > d && daysTo(r.plan) <= 5), out = rows.filter(r => r.out === d);
+  let h = '<h2>' + md(d) + '（' + wk(d) + '）</h2>' + larkStamp();
+  if (late.length) h += '<h2>🔴 超過交付日還沒交</h2>' + late.map(larkCard).join('');
+  if (due.length) h += '<h2>🔥 今天要交</h2>' + due.map(larkCard).join('');
+  if (out.length) h += '<h2>👀 今天預計外審</h2>' + out.map(larkCard).join('');
+  if (soon.length) h += '<h2>⏳ 5 天內要交</h2>' + soon.map(larkCard).join('');
+  if (!late.length && !due.length && !out.length && !soon.length) h += '<div class="empty">5 天內沒有要交的片 🎉</div>';
+  h += '<h2>📝 例行</h2><div class="todo"><span>📝</span><b>寫每日復盤</b><small>每天 21:00</small></div>';
+  if (wk(d) === '五') h += '<div class="todo"><span>📋</span><b>打 IP 週報</b><small>今天週五 10:00</small></div>';
+  return h;
+}
+
+function viewDue() {
+  const rows = larkRows();
+  if (!rows.length) return larkStamp() + '<div class="empty">沒有還沒交付的片 👍</div>';
+  return larkStamp() + '<h2>還沒填實際交付日的片（' + rows.length + ' 支）</h2>' + rows.map(larkCard).join('') +
+    '<div class="meta" style="justify-content:center;margin-top:8px">交了記得在 Lark 填「實際交付日」，下次更新就會消失</div>';
+}
+
 function render() {
   if (!data) return;
   if (!month) month = data.today.slice(0, 7);
-  document.querySelectorAll('nav button').forEach(b => b.classList.toggle('on', b.dataset.tab === tab));
-  $('#view').innerHTML = { today: viewToday, undone: viewUndone, month: viewMonth, client: viewClient }[tab]();
+  if (!TABS[mode].some(t => t[0] === tab)) tab = TABS[mode][0][0];
+  document.querySelectorAll('.modes button').forEach(b => b.classList.toggle('on', b.dataset.mode === mode));
+  document.querySelector('nav').innerHTML = TABS[mode].map(t =>
+    '<button data-tab="' + t[0] + '"' + (t[0] === tab ? ' class="on"' : '') + '><span>' + t[1] + '</span>' + t[2] + '</button>').join('');
+  $('#view').innerHTML = { wtoday: viewWorkToday, due: viewDue, today: viewToday, undone: viewUndone, month: viewMonth, client: viewClient }[tab]();
 }
 
 function toast(t) { const el = $('#toast'); el.textContent = t; el.classList.add('show'); clearTimeout(toast.h); toast.h = setTimeout(() => el.classList.remove('show'), 1500); }
@@ -242,7 +302,13 @@ function toast(t) { const el = $('#toast'); el.textContent = t; el.classList.add
 // ── 操作 ──
 document.querySelector('nav').addEventListener('click', ev => {
   const b = ev.target.closest('button'); if (!b) return;
-  tab = b.dataset.tab; try { localStorage.setItem('tab', tab); } catch (e) {}
+  tab = b.dataset.tab; try { localStorage.setItem('tab_' + mode, tab); } catch (e) {}
+  render(); window.scrollTo(0, 0);
+});
+document.querySelector('.modes').addEventListener('click', ev => {
+  const b = ev.target.closest('button'); if (!b) return;
+  mode = b.dataset.mode;
+  try { localStorage.setItem('mode', mode); tab = localStorage.getItem('tab_' + mode) || TABS[mode][0][0]; } catch (e) { tab = TABS[mode][0][0]; }
   render(); window.scrollTo(0, 0);
 });
 $('#view').addEventListener('click', ev => {
